@@ -1,186 +1,95 @@
-pragma solidity ^0.4.24;
-// ----------------------------------------------------------------------------
-// Sample token contract
-//
-// Symbol        : DOOR
-// Name          : DoorCoin
-// Total supply  : 33600000000000 
-// Decimals      : 5
-// Owner Account : 0x523f8F98ecD1FD8a61196bA715D1f044381c29fC
-//
-// Enjoy.
-//
-// (c) by Juan Cruz Martinez 2020. MIT Licence.
-// ----------------------------------------------------------------------------
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.6.0;
+
+interface IERC20 {
+
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 
 
-// ----------------------------------------------------------------------------
-// Lib: Safe Math
-// ----------------------------------------------------------------------------
-contract SafeMath {
-
-    function safeAdd(uint a, uint b) public pure returns (uint c) {
-        c = a + b;
-        require(c >= a);
-    }
-
-    function safeSub(uint a, uint b) public pure returns (uint c) {
-        require(b <= a);
-        c = a - b;
-    }
-
-    function safeMul(uint a, uint b) public pure returns (uint c) {
-        c = a * b;
-        require(a == 0 || c / a == b);
-    }
-
-    function safeDiv(uint a, uint b) public pure returns (uint c) {
-        require(b > 0);
-        c = a / b;
-    }
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 
-/**
-ERC Token Standard #20 Interface
-https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20-token-standard.md
-*/
-contract ERC20Interface {
-    function totalSupply() public constant returns (uint);
-    function balanceOf(address tokenOwner) public constant returns (uint balance);
-    function allowance(address tokenOwner, address spender) public constant returns (uint remaining);
-    function transfer(address to, uint tokens) public returns (bool success);
-    function approve(address spender, uint tokens) public returns (bool success);
-    function transferFrom(address from, address to, uint tokens) public returns (bool success);
+contract DoorToken is IERC20 {
 
-    event Transfer(address indexed from, address indexed to, uint tokens);
+    string public constant name = "DoorToken";
+    string public constant symbol = "DOOR";
+    uint8 public constant decimals = 18;
+
+
     event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
-}
+    event Transfer(address indexed from, address indexed to, uint tokens);
 
 
-/**
-Contract function to receive approval and execute function in one call
+    mapping(address => uint256) balances;
 
-Borrowed from MiniMeToken
-*/
-contract ApproveAndCallFallBack {
-    function receiveApproval(address from, uint256 tokens, address token, bytes data) public;
-}
+    mapping(address => mapping (address => uint256)) allowed;
 
-/**
-ERC20 Token, with the addition of symbol, name and decimals and assisted token transfers
-*/
-contract DoorCoin is ERC20Interface, SafeMath {
-    string public symbol;
-    string public  name;
-    uint8 public decimals;
-    uint public _totalSupply;
+    uint256 totalSupply_;
 
-    mapping(address => uint) balances;
-    mapping(address => mapping(address => uint)) allowed;
+    using SafeMath for uint256;
 
 
-    // ------------------------------------------------------------------------
-    // Constructor
-    // ------------------------------------------------------------------------
-    constructor() public {
-        symbol = "DOOR";
-        name = "DoorCoin Token";
-        decimals = 5;
-        _totalSupply = 33600000000000;
-        balances[0x523f8F98ecD1FD8a61196bA715D1f044381c29fC] = _totalSupply;
-        emit Transfer(address(0), 0x523f8F98ecD1FD8a61196bA715D1f044381c29fC, _totalSupply);
+   constructor() public {
+	totalSupply_ = 4000000000 * (10 ** 18);
+	balances[msg.sender] = totalSupply_;
     }
 
-
-    // ------------------------------------------------------------------------
-    // Total supply
-    // ------------------------------------------------------------------------
-    function totalSupply() public constant returns (uint) {
-        return _totalSupply  - balances[address(0)];
+    function totalSupply() public override view returns (uint256) {
+	return totalSupply_;
     }
 
-
-    // ------------------------------------------------------------------------
-    // Get the token balance for account tokenOwner
-    // ------------------------------------------------------------------------
-    function balanceOf(address tokenOwner) public constant returns (uint balance) {
+    function balanceOf(address tokenOwner) public override view returns (uint256) {
         return balances[tokenOwner];
     }
 
-
-    // ------------------------------------------------------------------------
-    // Transfer the balance from token owner's account to Dest account
-    // - Owner's account must have sufficient balance to transfer
-    // - 0 value transfers are allowed
-    // ------------------------------------------------------------------------
-    function transfer(address Dest, uint tokens) public returns (bool success) {
-        balances[msg.sender] = safeSub(balances[msg.sender], tokens);
-        balances[Dest] = safeAdd(balances[Dest], tokens);
-        emit Transfer(msg.sender, Dest, tokens);
+    function transfer(address receiver, uint256 numTokens) public override returns (bool) {
+        require(numTokens <= balances[msg.sender]);
+        balances[msg.sender] = balances[msg.sender].sub(numTokens);
+        balances[receiver] = balances[receiver].add(numTokens);
+        emit Transfer(msg.sender, receiver, numTokens);
         return true;
     }
 
-
-    // ------------------------------------------------------------------------
-    // Token owner can approve for spender to transferFrom(...) tokens
-    // from the token owner's account
-    //
-    // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20-token-standard.md
-    // recommends that there are no checks for the approval double-spend attack
-    // as this should be implemented in user interfaces 
-    // ------------------------------------------------------------------------
-    function approve(address spender, uint tokens) public returns (bool success) {
-        allowed[msg.sender][spender] = tokens;
-        emit Approval(msg.sender, spender, tokens);
+    function approve(address delegate, uint256 numTokens) public override returns (bool) {
+        allowed[msg.sender][delegate] = numTokens;
+        emit Approval(msg.sender, delegate, numTokens);
         return true;
     }
 
+    function allowance(address owner, address delegate) public override view returns (uint) {
+        return allowed[owner][delegate];
+    }
 
-    // ------------------------------------------------------------------------
-    // Transfer tokens from the from account to the to account
-    // 
-    // The calling account must already have sufficient tokens approve(...)-d
-    // for spending from the from account and
-    // - From account must have sufficient balance to transfer
-    // - Spender must have sufficient allowance to transfer
-    // - 0 value transfers are allowed
-    // ------------------------------------------------------------------------
-    function transferFrom(address from, address to, uint tokens) public returns (bool success) {
-        balances[from] = safeSub(balances[from], tokens);
-        allowed[from][msg.sender] = safeSub(allowed[from][msg.sender], tokens);
-        balances[to] = safeAdd(balances[to], tokens);
-        emit Transfer(from, to, tokens);
+    function transferFrom(address owner, address buyer, uint256 numTokens) public override returns (bool) {
+        require(numTokens <= balances[owner]);
+        require(numTokens <= allowed[owner][msg.sender]);
+
+        balances[owner] = balances[owner].sub(numTokens);
+        allowed[owner][msg.sender] = allowed[owner][msg.sender].sub(numTokens);
+        balances[buyer] = balances[buyer].add(numTokens);
+        emit Transfer(owner, buyer, numTokens);
         return true;
     }
+}
 
-
-    // ------------------------------------------------------------------------
-    // Returns the amount of tokens approved by the owner that can be
-    // transferred to the spender's account
-    // ------------------------------------------------------------------------
-    function allowance(address tokenOwner, address spender) public constant returns (uint remaining) {
-        return allowed[tokenOwner][spender];
+library SafeMath {
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+      assert(b <= a);
+      return a - b;
     }
 
-
-    // ------------------------------------------------------------------------
-    // Token owner can approve for spender to transferFrom(...) tokens
-    // from the token owner's account. The spender contract function
-    // receiveApproval(...) is then executed
-    // ------------------------------------------------------------------------
-    function approveAndCall(address spender, uint tokens, bytes data) public returns (bool success) {
-        allowed[msg.sender][spender] = tokens;
-        emit Approval(msg.sender, spender, tokens);
-        ApproveAndCallFallBack(spender).receiveApproval(msg.sender, tokens, this, data);
-        return true;
-    }
-
-
-    // ------------------------------------------------------------------------
-    // Don't accept ETH
-    // ------------------------------------------------------------------------
-    function () public payable {
-        revert();
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+      uint256 c = a + b;
+      assert(c >= a);
+      return c;
     }
 }
